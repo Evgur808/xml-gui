@@ -22,8 +22,9 @@
       border-radius: 10px;
     }
     textarea {
-      min-height: 280px;
+      min-height: 220px;
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      white-space: pre;
     }
     .req::after { content: " *"; color: #c00; }
     .err { color: #c00; font-size: 13px; }
@@ -142,13 +143,21 @@
 </div>
 
 <div class="bar">
-  <button type="button" onclick="app.generate()">Сгенерировать XML</button>
-  <button id="btnDownload" type="button" onclick="app.download()" disabled>Скачать data.xml</button>
+  <button id="btnGenerate" type="button" onclick="app.generate()">Сгенерировать XML</button>
+  <button id="btnDownload" type="button" onclick="app.downloadXml()" disabled>Скачать data.xml</button>
   <span id="formMsg"></span>
 </div>
 
 <label>XML</label>
 <textarea id="xmlOut" readonly></textarea>
+
+<h2>Base64 от XML</h2>
+<div class="bar">
+  <button id="btnCopyB64" type="button" onclick="app.copyBase64()" disabled>Скопировать Base64</button>
+  <button id="btnDownloadB64" type="button" onclick="app.downloadBase64()" disabled>Скачать base64.txt</button>
+  <span id="b64Msg"></span>
+</div>
+<textarea id="base64Out" readonly></textarea>
 
 <script>
 const WORKER_URL = "https://flat-fire-237d.evgur808.workers.dev/party";
@@ -182,15 +191,33 @@ function escapeXml(v) {
     .replaceAll("'","&apos;");
 }
 
+function toBase64Utf8(text) {
+  const bytes = new TextEncoder().encode(text);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin);
+}
+
+function setMsg(elId, text, ok) {
+  const el = $(elId);
+  el.textContent = text || "";
+  el.className = ok ? "ok" : "err";
+  el.style.fontWeight = "700";
+  setTimeout(() => { el.style.fontWeight = "400"; }, 700);
+}
+
 async function lookup() {
   const btn = $("btnLookup");
   const inn = $("InstitutionINN").value.trim();
   $("lookupMsg").textContent = "";
 
   if (!/^\d{10}$/.test(inn)) {
-    $("lookupMsg").textContent = "Ошибка: ИНН должен быть 10 цифр";
+    $("err_inn").textContent = "ИНН должен быть 10 цифр";
+    $("lookupMsg").textContent = "Ошибка";
+    $("lookupMsg").className = "err";
     return;
   }
+  $("err_inn").textContent = "";
 
   btn.disabled = true;
   btn.textContent = "Ищу...";
@@ -201,17 +228,22 @@ async function lookup() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ inn })
     });
-    const j = await r.json();
+
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j?.error || ("HTTP " + r.status));
+
     const s = j.suggestions?.[0];
     if (!s) throw new Error("Не найдено");
 
-    $("InstitutionName").value = s.data.name.full_with_opf || s.value;
-    $("InstitutionOGRN").value = s.data.ogrn;
+    $("InstitutionName").value = s.data?.name?.full_with_opf || s.value || "";
+    $("InstitutionOGRN").value = s.data?.ogrn || "";
+
     $("lookupMsg").textContent = "Ок";
     $("lookupMsg").className = "ok";
   } catch (e) {
     $("lookupMsg").textContent = "Ошибка";
     $("lookupMsg").className = "err";
+    console.error(e);
   } finally {
     btn.disabled = false;
     btn.textContent = "Подтянуть InstitutionName + OGRN по ИНН";
@@ -219,66 +251,126 @@ async function lookup() {
 }
 
 function generate() {
-  const required = ["InstitutionINN","InstitutionName","InstitutionOGRN","PersonUID","FirstName","LastName","Position","RequestUID"];
+  const required = [
+    "InstitutionINN","InstitutionName","InstitutionOGRN",
+    "PersonUID","FirstName","LastName",
+    "InstitutionType","Position","VidJob","Deleted",
+    "RequestType","RequestUID"
+  ];
+
+  const inn = $("InstitutionINN").value.trim();
+  if (!/^\d{10}$/.test(inn)) {
+    $("err_inn").textContent = "ИНН должен быть 10 цифр";
+    setMsg("formMsg", "Ошибка: проверь ИНН", false);
+    return;
+  } else {
+    $("err_inn").textContent = "";
+  }
+
   for (const id of required) {
     if (!$(id).value.trim()) {
-      $("formMsg").textContent = "Не заполнены обязательные поля";
-      $("formMsg").className = "err";
+      setMsg("formMsg", "Не заполнены обязательные поля", false);
+      $("btnDownload").disabled = true;
+      $("btnCopyB64").disabled = true;
+      $("btnDownloadB64").disabled = true;
+      $("xmlOut").value = "";
+      $("base64Out").value = "";
+      $("b64Msg").textContent = "";
       return;
     }
   }
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<Data TypeExportData="${CONST.TypeExportData}"
-      PackageVersion="${CONST.PackageVersion}"
-      DateUnload="${nowMoscowISO()}">
-  <DataInstitution InstitutionINN="${$("InstitutionINN").value}"
-                   InstitutionName="${escapeXml($("InstitutionName").value)}"
-                   InstitutionOGRN="${$("InstitutionOGRN").value}"
-                   InnGRBS=""
-                   InnCB="">
-    <Person PersonUID="${$("PersonUID").value}"
-            FirstName="${escapeXml($("FirstName").value)}"
-            LastName="${escapeXml($("LastName").value)}"
-            InsuranceNumber="${CONST.InsuranceNumber}"
-            PersonINN="${CONST.PersonINN}"
-            PersonWorkEmail="${CONST.PersonWorkEmail}"
-            PersonWorkPhone="${CONST.PersonWorkPhone}">
+<Data TypeExportData="${escapeXml(CONST.TypeExportData)}"
+      PackageVersion="${escapeXml(CONST.PackageVersion)}"
+      DateUnload="${escapeXml(nowMoscowISO())}">
+  <DataInstitution InstitutionINN="${escapeXml($("InstitutionINN").value.trim())}"
+                   InstitutionName="${escapeXml($("InstitutionName").value.trim())}"
+                   InstitutionOGRN="${escapeXml($("InstitutionOGRN").value.trim())}"
+                   InnGRBS="${escapeXml(CONST.InnGRBS)}"
+                   InnCB="${escapeXml(CONST.InnCB)}">
+    <Person PersonUID="${escapeXml($("PersonUID").value.trim())}"
+            FirstName="${escapeXml($("FirstName").value.trim())}"
+            LastName="${escapeXml($("LastName").value.trim())}"${$("MiddleName").value.trim() ? `\n            MiddleName="${escapeXml($("MiddleName").value.trim())}"` : ""}
+            InsuranceNumber="${escapeXml(CONST.InsuranceNumber)}"
+            PersonINN="${escapeXml(CONST.PersonINN)}"
+            PersonWorkEmail="${escapeXml(CONST.PersonWorkEmail)}"
+            PersonWorkPhone="${escapeXml(CONST.PersonWorkPhone)}">
       <Employments>
-        <Value InstitutionINN="${$("InstitutionINN").value}"
-               InstitutionName="${escapeXml($("InstitutionName").value)}"
-               InstitutionType="${$("InstitutionType").value}"
-               Position="${escapeXml($("Position").value)}"
-               VidJob="${$("VidJob").value}"
-               Deleted="${$("Deleted").value}"/>
+        <Value InstitutionINN="${escapeXml($("InstitutionINN").value.trim())}"
+               InstitutionName="${escapeXml($("InstitutionName").value.trim())}"
+               InstitutionType="${escapeXml($("InstitutionType").value.trim())}"
+               Position="${escapeXml($("Position").value.trim())}"
+               VidJob="${escapeXml($("VidJob").value.trim())}"
+               Deleted="${escapeXml($("Deleted").value.trim())}"/>
       </Employments>
     </Person>
-    <Request InfoSystemName="${CONST.RequestInfoSystemName}"
-             Type="${$("RequestType").value}"
-             UID="${$("RequestUID").value}">
-      <Row Name="${CONST.RowName}">
-        <Value Name="${CONST.RowValueName}"/>
+    <Request InfoSystemName="${escapeXml(CONST.RequestInfoSystemName)}"
+             Type="${escapeXml($("RequestType").value.trim())}"
+             UID="${escapeXml($("RequestUID").value.trim())}">
+      <Row Name="${escapeXml(CONST.RowName)}">
+        <Value Name="${escapeXml(CONST.RowValueName)}"/>
       </Row>
     </Request>
   </DataInstitution>
 </Data>`;
 
   $("xmlOut").value = xml;
-  $("formMsg").textContent = "XML сгенерирован";
-  $("formMsg").className = "ok";
+
+  const b64 = toBase64Utf8(xml);
+  $("base64Out").value = b64;
+
+  setMsg("formMsg", "XML сгенерирован", true);
+  setMsg("b64Msg", "Base64 сформирован", true);
+
   $("btnDownload").disabled = false;
+  $("btnCopyB64").disabled = false;
+  $("btnDownloadB64").disabled = false;
 }
 
-function download() {
-  const b = new Blob([$("xmlOut").value], { type: "application/xml" });
+function downloadBlob(text, filename, mime) {
+  const b = new Blob([text], { type: mime || "text/plain;charset=utf-8" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(b);
-  a.download = "data.xml";
+  a.download = filename;
+  document.body.appendChild(a);
   a.click();
+  a.remove();
   URL.revokeObjectURL(a.href);
 }
 
-window.app = { lookup, generate, download };
+function downloadXml() {
+  const xml = $("xmlOut").value || "";
+  if (!xml) return;
+  downloadBlob(xml, "data.xml", "application/xml;charset=utf-8");
+}
+
+function downloadBase64() {
+  const b64 = $("base64Out").value || "";
+  if (!b64) return;
+  downloadBlob(b64, "base64.txt", "text/plain;charset=utf-8");
+}
+
+async function copyBase64() {
+  const b64 = $("base64Out").value || "";
+  if (!b64) return;
+
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(b64);
+    } else {
+      $("base64Out").focus();
+      $("base64Out").select();
+      document.execCommand("copy");
+    }
+    setMsg("b64Msg", "Скопировано", true);
+  } catch (e) {
+    console.error(e);
+    setMsg("b64Msg", "Не удалось скопировать", false);
+  }
+}
+
+window.app = { lookup, generate, downloadXml, downloadBase64, copyBase64 };
 </script>
 </body>
 </html>
