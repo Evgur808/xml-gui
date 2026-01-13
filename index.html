@@ -3,26 +3,35 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>XML GUI</title>
+  <title>Генератор XML</title>
   <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; max-width: 980px; margin: 24px auto; padding: 0 16px; }
+    html, body { height: 100%; }
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      max-width: 980px; margin: 24px auto; padding: 0 16px;
+      position: relative;
+    }
+    #app { position: relative; z-index: 10; } /* важно: поверх всего */
     .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .row { display: grid; gap: 6px; }
     label { font-size: 13px; }
-    input, select, textarea, button { font-size: 14px; padding: 10px; border: 1px solid #ccc; border-radius: 10px; }
+    input, select, textarea, button {
+      font-size: 14px; padding: 10px;
+      border: 1px solid #ccc; border-radius: 10px;
+    }
     textarea { min-height: 280px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    button { cursor: pointer; position: relative; z-index: 20; } /* важно: кликабельность */
     .req::after { content: " *"; color: #c00; }
     .err { color: #c00; font-size: 13px; }
     .ok  { color: #0a7; font-size: 13px; }
     .bar { display: flex; gap: 10px; flex-wrap: wrap; margin: 12px 0; align-items: center; }
     .card { border: 1px solid #eee; border-radius: 14px; padding: 14px; background: #fafafa; }
     .small { font-size: 12px; color: #666; }
-    #jsStatus { margin-top: 10px; }
   </style>
 </head>
 <body>
+<div id="app">
   <h1>Генератор XML для тестов</h1>
-  <p class="small">Фамилия в XSD — <b>LastName</b>. В XML будет именно так.</p>
 
   <div class="card">
     <div class="small">
@@ -37,7 +46,7 @@
       <input id="InstitutionINN" placeholder="например 7830002430" maxlength="10" />
       <div id="err_inn" class="err"></div>
 
-      <button id="btnLookup" type="button">Подтянуть InstitutionName + OGRN по ИНН</button>
+      <button type="button" onclick="app.lookup()">Подтянуть InstitutionName + OGRN по ИНН</button>
       <div id="lookupMsg" class="small"></div>
     </div>
 
@@ -116,19 +125,17 @@
   </div>
 
   <div class="bar">
-    <button id="btnGenerate" type="button">Сгенерировать XML</button>
-    <button id="btnDownload" type="button" disabled>Скачать data.xml</button>
+    <button type="button" onclick="app.generate()">Сгенерировать XML</button>
+    <button id="btnDownload" type="button" onclick="app.download()" disabled>Скачать data.xml</button>
     <span id="formMsg"></span>
   </div>
 
   <label>XML</label>
   <textarea id="xmlOut" readonly></textarea>
-
-  <div id="jsStatus" class="small"></div>
+</div>
 
 <script>
-(() => {
-  // Поменяй только если воркер другой
+  // ===== Настройки =====
   const WORKER_URL = "https://flat-fire-237d.evgur808.workers.dev/party";
 
   const CONST = {
@@ -146,13 +153,6 @@
   };
 
   const $ = (id) => document.getElementById(id);
-
-  function setJsStatus(text, isError=false) {
-    const el = $("jsStatus");
-    if (!el) return;
-    el.textContent = text;
-    el.className = isError ? "err" : "ok";
-  }
 
   function nowMoscowISO() {
     const s = new Date().toLocaleString("sv-SE", { timeZone: "Europe/Moscow", hour12: false });
@@ -178,13 +178,11 @@
 
     let missing = [];
     for (const k of required) {
-      const el = $(k);
-      if (!el) { missing.push(k + "(нет элемента)"); continue; }
-      const val = el.value.trim();
+      const val = ($(k)?.value || "").trim();
       if (!val) missing.push(k);
     }
 
-    const inn = $("InstitutionINN").value.trim();
+    const inn = ($("InstitutionINN").value || "").trim();
     let innErr = "";
     if (inn && !/^\d{10}$/.test(inn)) innErr = "ИНН должен быть ровно 10 цифр.";
     $("err_inn").textContent = innErr;
@@ -193,8 +191,8 @@
     return missing;
   }
 
-  async function dadataLookup() {
-    const inn = $("InstitutionINN").value.trim();
+  async function lookup() {
+    const inn = ($("InstitutionINN").value || "").trim();
     $("lookupMsg").textContent = "";
 
     if (!/^\d{10}$/.test(inn)) {
@@ -212,8 +210,7 @@
 
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) {
-        const msg = data?.error ? `${data.error}: ${data.details || ""}` : `HTTP ${resp.status}`;
-        throw new Error(msg);
+        throw new Error(data?.error ? `${data.error}: ${data.details || ""}` : `HTTP ${resp.status}`);
       }
 
       const s = (data.suggestions || [])[0];
@@ -233,7 +230,7 @@
     }
   }
 
-  function generateXml() {
+  function generate() {
     const missing = validateRequired();
     const msg = $("formMsg");
     msg.className = "err";
@@ -242,10 +239,11 @@
     if (missing.length) {
       msg.textContent = "Не заполнены обязательные поля: " + missing.join(", ");
       $("btnDownload").disabled = true;
-      return null;
+      $("xmlOut").value = "";
+      return;
     }
 
-    const v = (id) => $(id).value.trim();
+    const v = (id) => ($(id).value || "").trim();
 
     const InstitutionINN = v("InstitutionINN");
     const InstitutionName = v("InstitutionName");
@@ -302,13 +300,16 @@
   </DataInstitution>
 </Data>`;
 
+    $("xmlOut").value = xml;
     msg.className = "ok";
     msg.textContent = "XML сгенерирован ✅";
     $("btnDownload").disabled = false;
-    return xml;
   }
 
-  function downloadXml(text) {
+  function download() {
+    const text = $("xmlOut").value || "";
+    if (!text) return;
+
     const blob = new Blob([text], { type: "application/xml;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -320,27 +321,8 @@
     URL.revokeObjectURL(url);
   }
 
-  function init() {
-    try {
-      $("btnLookup").addEventListener("click", dadataLookup);
-      $("btnGenerate").addEventListener("click", () => {
-        const xml = generateXml();
-        $("xmlOut").value = xml || "";
-      });
-      $("btnDownload").addEventListener("click", () => {
-        const xml = $("xmlOut").value;
-        if (xml) downloadXml(xml);
-      });
-
-      setJsStatus("JS загружен: кнопки должны работать ✅");
-    } catch (e) {
-      console.error(e);
-      setJsStatus("JS ошибка: открой F12 → Console (есть красные ошибки).", true);
-    }
-  }
-
-  window.addEventListener("DOMContentLoaded", init);
-})();
+  // делаем глобально, чтобы onclick работал всегда
+  window.app = { lookup, generate, download };
 </script>
 </body>
 </html>
