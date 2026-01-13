@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>XML GUI</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; max-width: 980px; margin: 24px auto; padding: 0 16px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .row { display: grid; gap: 6px; }
+    label { font-size: 13px; }
+    input, select, textarea, button { font-size: 14px; padding: 10px; border: 1px solid #ccc; border-radius: 10px; }
+    textarea { min-height: 280px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .req::after { content: " *"; color: #c00; }
+    .err { color: #c00; font-size: 13px; }
+    .ok  { color: #0a7; font-size: 13px; }
+    .bar { display: flex; gap: 10px; flex-wrap: wrap; margin: 12px 0; align-items: center; }
+    .card { border: 1px solid #eee; border-radius: 14px; padding: 14px; background: #fafafa; }
+    .small { font-size: 12px; color: #666; }
+  </style>
+</head>
+<body>
+  <h1>Генератор XML для тестов</h1>
+  <p class="small">Фамилия в XSD — <b>LastName</b>. В XML будет именно так.</p>
+
+  <div class="card">
+    <div class="small">
+      Автопоиск организации идёт через Cloudflare Worker (ключи DaData хранятся там, а не в браузере).
+    </div>
+  </div>
+
+  <h2>Организация</h2>
+  <div class="grid">
+    <div class="row">
+      <label class="req">InstitutionINN (10 цифр)</label>
+      <input id="InstitutionINN" placeholder="например 7830002430" maxlength="10" />
+      <div id="err_inn" class="err"></div>
+      <button id="btnLookup" type="button">Подтянуть InstitutionName + OGRN по ИНН</button>
+      <div id="lookupMsg" class="small"></div>
+    </div>
+
+    <div class="row">
+      <label class="req">InstitutionName</label>
+      <input id="InstitutionName" placeholder="подставится по ИНН" />
+      <label class="req">InstitutionOGRN</label>
+      <input id="InstitutionOGRN" placeholder="подставится по ИНН" />
+    </div>
+  </div>
+
+  <h2>Пользователь</h2>
+  <div class="grid">
+    <div class="row">
+      <label class="req">PersonUID</label>
+      <input id="PersonUID" placeholder="например 123456" />
+    </div>
+    <div class="row">
+      <label class="req">FirstName</label>
+      <input id="FirstName" placeholder="Имя" />
+    </div>
+    <div class="row">
+      <label class="req">LastName (Фамилия)</label>
+      <input id="LastName" placeholder="Фамилия" />
+    </div>
+    <div class="row">
+      <label>MiddleName (необязательно)</label>
+      <input id="MiddleName" placeholder="Отчество (можно пусто)" />
+    </div>
+  </div>
+
+  <h2>Employments.Value</h2>
+  <div class="grid">
+    <div class="row">
+      <label class="req">InstitutionType</label>
+      <select id="InstitutionType">
+        <option value="grbs">grbs</option>
+        <option value="organization">organization</option>
+        <option value="cb">cb</option>
+        <option value="mo">mo</option>
+      </select>
+    </div>
+    <div class="row">
+      <label class="req">Position</label>
+      <input id="Position" placeholder="например Главный специалист" />
+    </div>
+    <div class="row">
+      <label class="req">VidJob</label>
+      <select id="VidJob">
+        <option value="Основное место работы">Основное место работы</option>
+        <option value="Совместительство">Совместительство</option>
+      </select>
+    </div>
+    <div class="row">
+      <label class="req">Deleted</label>
+      <select id="Deleted">
+        <option value="false">false</option>
+        <option value="true">true</option>
+      </select>
+    </div>
+  </div>
+
+  <h2>Request</h2>
+  <div class="grid">
+    <div class="row">
+      <label class="req">Request Type</label>
+      <select id="RequestType">
+        <option value="connect">connect</option>
+        <option value="change">change</option>
+      </select>
+    </div>
+    <div class="row">
+      <label class="req">Request UID</label>
+      <input id="RequestUID" placeholder="например 19533" />
+    </div>
+  </div>
+
+  <div class="bar">
+    <button id="btnGenerate" type="button">Сгенерировать XML</button>
+    <button id="btnDownload" type="button" disabled>Скачать data.xml</button>
+    <span id="formMsg"></span>
+  </div>
+
+  <label>XML</label>
+  <textarea id="xmlOut" readonly></textarea>
+
+<script>
+  // ТВОЙ WORKER
+  const WORKER_URL = "https://flat-fire-237d.evgur808.workers.dev/party";
+
+  // Константы
+  const CONST = {
+    TypeExportData: "ПользователиДляБПЭК",
+    PackageVersion: "2026-01-01",
+    InsuranceNumber: "01234567890",
+    PersonWorkEmail: "evgenii.gurbanovskii@unicardtech.ru",
+    PersonINN: "012345678912",
+    PersonWorkPhone: "78127770011",
+    InnGRBS: "",
+    InnCB: "",
+    RequestInfoSystemName: "АИС БП-ЭК",
+    RowName: "Functional_role",
+    RowValueName: "Не заполняется пользователем",
+  };
+
+  const $ = (id) => document.getElementById(id);
+
+  function nowMoscowISO() {
+    const s = new Date().toLocaleString("sv-SE", { timeZone: "Europe/Moscow", hour12: false });
+    return s.replace(" ", "T");
+  }
+
+  function escapeXml(v) {
+    return String(v)
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;")
+      .replaceAll("\"","&quot;")
+      .replaceAll("'","&apos;");
+  }
+
+  function validateRequired() {
+    const required = [
+      "InstitutionINN", "InstitutionName", "InstitutionOGRN",
+      "PersonUID", "FirstName", "LastName",
+      "InstitutionType", "Position", "VidJob", "Deleted",
+      "RequestType", "RequestUID"
+    ];
+
+    let missing = [];
+    for (const k of required) {
+      const val = $(k).value.trim();
+      if (!val) missing.push(k);
+    }
+
+    const inn = $("InstitutionINN").value.trim();
+    let innErr = "";
+    if (inn && !/^\d{10}$/.test(inn)) innErr = "ИНН должен быть ровно 10 цифр.";
+    $("err_inn").textContent = innErr;
+
+    if (innErr) missing.push("InstitutionINN");
+    return missing;
+  }
+
+  async function dadataLookup() {
+    const inn = $("InstitutionINN").value.trim();
+    $("lookupMsg").textContent = "";
+
+    if (!/^\d{10}$/.test(inn)) {
+      $("lookupMsg").textContent = "Сначала введи корректный ИНН (10 цифр).";
+      return;
+    }
+
+    try {
+      $("lookupMsg").textContent = "Ищу организацию...";
+      const resp = await fetch(WORKER_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ inn })
+      });
+
+      const data = await resp.json();
+      if (!resp.ok) {
+        throw new Error(data?.error ? `${data.error}: ${data.details || ""}` : "Ошибка прокси");
+      }
+
+      const s = (data.suggestions || [])[0];
+      if (!s || !s.data) throw new Error("Ничего не найдено по этому ИНН.");
+
+      const nameObj = s.data.name || {};
+      const fullName = nameObj.full_with_opf || nameObj.full || s.value || "";
+      const ogrn = s.data.ogrn || "";
+
+      if (fullName) $("InstitutionName").value = fullName;
+      if (ogrn) $("InstitutionOGRN").value = ogrn;
+
+      $("lookupMsg").textContent = "Ок: подставил название и ОГРН.";
+    } catch (e) {
+      $("lookupMsg").textContent = "Ошибка: " + e.message;
+    }
+  }
+
+  function generateXml() {
+    const missing = validateRequired();
+    const msg = $("formMsg");
+    msg.className = "err";
+    msg.textContent = "";
+
+    if (missing.length) {
+      msg.textContent = "Не заполнены обязательные поля: " + missing.join(", ");
+      $("btnDownload").disabled = true;
+      return null;
+    }
+
+    const v = (id) => $(id).value.trim();
+
+    const InstitutionINN = v("InstitutionINN");
+    const InstitutionName = v("InstitutionName");
+    const InstitutionOGRN = v("InstitutionOGRN");
+
+    const PersonUID = v("PersonUID");
+    const FirstName = v("FirstName");
+    const LastName = v("LastName");
+    const MiddleName = v("MiddleName");
+
+    const InstitutionType = v("InstitutionType");
+    const Position = v("Position");
+    const VidJob = v("VidJob");
+    const Deleted = v("Deleted");
+
+    const RequestType = v("RequestType");
+    const RequestUID = v("RequestUID");
+
+    const DateUnload = nowMoscowISO();
+
+    const xml =
+`<?xml version="1.0" encoding="UTF-8"?>
+<Data TypeExportData="${escapeXml(CONST.TypeExportData)}"
+      PackageVersion="${escapeXml(CONST.PackageVersion)}"
+      DateUnload="${escapeXml(DateUnload)}">
+  <DataInstitution InstitutionINN="${escapeXml(InstitutionINN)}"
+                   InstitutionName="${escapeXml(InstitutionName)}"
+                   InstitutionOGRN="${escapeXml(InstitutionOGRN)}"
+                   InnGRBS="${escapeXml(CONST.InnGRBS)}"
+                   InnCB="${escapeXml(CONST.InnCB)}">
+    <Person PersonUID="${escapeXml(PersonUID)}"
+            FirstName="${escapeXml(FirstName)}"
+            LastName="${escapeXml(LastName)}"${MiddleName ? `\n            MiddleName="${escapeXml(MiddleName)}"` : ""}
+            InsuranceNumber="${escapeXml(CONST.InsuranceNumber)}"
+            PersonINN="${escapeXml(CONST.PersonINN)}"
+            PersonWorkEmail="${escapeXml(CONST.PersonWorkEmail)}"
+            PersonWorkPhone="${escapeXml(CONST.PersonWorkPhone)}">
+      <Employments>
+        <Value InstitutionINN="${escapeXml(InstitutionINN)}"
+               InstitutionName="${escapeXml(InstitutionName)}"
+               InstitutionType="${escapeXml(InstitutionType)}"
+               Position="${escapeXml(Position)}"
+               VidJob="${escapeXml(VidJob)}"
+               Deleted="${escapeXml(Deleted)}"/>
+      </Employments>
+    </Person>
+    <Request InfoSystemName="${escapeXml(CONST.RequestInfoSystemName)}"
+             Type="${escapeXml(RequestType)}"
+             UID="${escapeXml(RequestUID)}">
+      <Row Name="${escapeXml(CONST.RowName)}">
+        <Value Name="${escapeXml(CONST.RowValueName)}"/>
+      </Row>
+    </Request>
+  </DataInstitution>
+</Data>`;
+
+    msg.className = "ok";
+    msg.textContent = "XM
