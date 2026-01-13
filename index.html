@@ -17,6 +17,7 @@
     .bar { display: flex; gap: 10px; flex-wrap: wrap; margin: 12px 0; align-items: center; }
     .card { border: 1px solid #eee; border-radius: 14px; padding: 14px; background: #fafafa; }
     .small { font-size: 12px; color: #666; }
+    #jsStatus { margin-top: 10px; }
   </style>
 </head>
 <body>
@@ -35,6 +36,7 @@
       <label class="req">InstitutionINN (10 цифр)</label>
       <input id="InstitutionINN" placeholder="например 7830002430" maxlength="10" />
       <div id="err_inn" class="err"></div>
+
       <button id="btnLookup" type="button">Подтянуть InstitutionName + OGRN по ИНН</button>
       <div id="lookupMsg" class="small"></div>
     </div>
@@ -122,11 +124,13 @@
   <label>XML</label>
   <textarea id="xmlOut" readonly></textarea>
 
+  <div id="jsStatus" class="small"></div>
+
 <script>
-  // ТВОЙ WORKER
+(() => {
+  // Поменяй только если воркер другой
   const WORKER_URL = "https://flat-fire-237d.evgur808.workers.dev/party";
 
-  // Константы
   const CONST = {
     TypeExportData: "ПользователиДляБПЭК",
     PackageVersion: "2026-01-01",
@@ -142,6 +146,13 @@
   };
 
   const $ = (id) => document.getElementById(id);
+
+  function setJsStatus(text, isError=false) {
+    const el = $("jsStatus");
+    if (!el) return;
+    el.textContent = text;
+    el.className = isError ? "err" : "ok";
+  }
 
   function nowMoscowISO() {
     const s = new Date().toLocaleString("sv-SE", { timeZone: "Europe/Moscow", hour12: false });
@@ -167,7 +178,9 @@
 
     let missing = [];
     for (const k of required) {
-      const val = $(k).value.trim();
+      const el = $(k);
+      if (!el) { missing.push(k + "(нет элемента)"); continue; }
+      const val = el.value.trim();
       if (!val) missing.push(k);
     }
 
@@ -197,9 +210,10 @@
         body: JSON.stringify({ inn })
       });
 
-      const data = await resp.json();
+      const data = await resp.json().catch(() => ({}));
       if (!resp.ok) {
-        throw new Error(data?.error ? `${data.error}: ${data.details || ""}` : "Ошибка прокси");
+        const msg = data?.error ? `${data.error}: ${data.details || ""}` : `HTTP ${resp.status}`;
+        throw new Error(msg);
       }
 
       const s = (data.suggestions || [])[0];
@@ -215,6 +229,7 @@
       $("lookupMsg").textContent = "Ок: подставил название и ОГРН.";
     } catch (e) {
       $("lookupMsg").textContent = "Ошибка: " + e.message;
+      console.error(e);
     }
   }
 
@@ -288,4 +303,44 @@
 </Data>`;
 
     msg.className = "ok";
-    msg.textContent = "XM
+    msg.textContent = "XML сгенерирован ✅";
+    $("btnDownload").disabled = false;
+    return xml;
+  }
+
+  function downloadXml(text) {
+    const blob = new Blob([text], { type: "application/xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "data.xml";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function init() {
+    try {
+      $("btnLookup").addEventListener("click", dadataLookup);
+      $("btnGenerate").addEventListener("click", () => {
+        const xml = generateXml();
+        $("xmlOut").value = xml || "";
+      });
+      $("btnDownload").addEventListener("click", () => {
+        const xml = $("xmlOut").value;
+        if (xml) downloadXml(xml);
+      });
+
+      setJsStatus("JS загружен: кнопки должны работать ✅");
+    } catch (e) {
+      console.error(e);
+      setJsStatus("JS ошибка: открой F12 → Console (есть красные ошибки).", true);
+    }
+  }
+
+  window.addEventListener("DOMContentLoaded", init);
+})();
+</script>
+</body>
+</html>
