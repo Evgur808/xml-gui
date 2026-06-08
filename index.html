@@ -3,43 +3,85 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Генератор XML</title>
+  <title>Генератор XML 2.0</title>
   <style>
+    :root {
+      --blue: #0b3b75;
+      --line: #cfd8e3;
+      --bg: #f7f9fc;
+      --err: #c62828;
+      --ok: #00875a;
+    }
     body {
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
-      max-width: 980px;
+      max-width: 1180px;
       margin: 24px auto;
-      padding: 0 16px;
+      padding: 0 16px 40px;
+      color: #06285a;
     }
-    h1,h2 { margin-top: 24px; }
+    h1,h2,h3 { margin-top: 24px; color: #072b61; }
+    h1 { display:flex; align-items:center; gap:12px; }
+    .badge {
+      font-size: 13px;
+      background: #e8f0ff;
+      border: 1px solid #bad0ff;
+      border-radius: 999px;
+      padding: 5px 10px;
+      color: #0b3b75;
+    }
     .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
     .row { display: grid; gap: 6px; }
-    label { font-size: 13px; }
+    label { font-size: 13px; font-weight: 650; }
     input, select, textarea, button {
       font-size: 14px;
       padding: 10px;
-      border: 1px solid #ccc;
+      border: 1px solid #bfc8d6;
       border-radius: 10px;
+      box-sizing: border-box;
+      width: 100%;
     }
     textarea {
-      min-height: 220px;
+      min-height: 250px;
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       white-space: pre;
+      color: #1c1c1c;
     }
-    .req::after { content: " *"; color: #c00; }
-    .err { color: #c00; font-size: 13px; }
-    .ok  { color: #0a7; font-size: 13px; }
+    .req::after { content: " *"; color: var(--err); }
+    .err { color: var(--err); font-size: 13px; }
+    .ok  { color: var(--ok); font-size: 13px; }
+    .hint { color:#5b6b82; font-size: 12px; }
     .bar { display: flex; gap: 10px; flex-wrap: wrap; margin: 12px 0; align-items: center; }
-
-    /* кнопки — визуальный эффект */
+    .bar button { width:auto; }
+    .card {
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px;
+      margin: 12px 0;
+    }
+    .employment-head {
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:12px;
+      margin-bottom: 12px;
+    }
+    .employment-head h3 { margin:0; }
+    .small-btn {
+      width:auto;
+      padding: 8px 10px;
+      font-size: 13px;
+    }
     button {
       cursor: pointer;
       background: #fff;
+      color: #06285a;
       box-shadow: 0 1px 2px rgba(0,0,0,.06);
       transition: transform .06s ease, box-shadow .15s ease, background-color .15s ease;
     }
     button:hover {
-      background: #f7f7f7;
+      background: #f2f6ff;
       box-shadow: 0 3px 10px rgba(0,0,0,.12);
     }
     button:active {
@@ -51,11 +93,21 @@
       cursor: not-allowed;
       box-shadow: none;
     }
+    .primary {
+      background:#0b63ce;
+      color:white;
+      border-color:#0b63ce;
+    }
+    .primary:hover { background:#0958b8; }
+    .danger { color:#b42318; border-color:#f3b4ad; }
+    @media (max-width: 820px) {
+      .grid, .grid3 { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
 
-<h1>Генератор XML для тестов</h1>
+<h1>Генератор XML для тестов <span class="badge">v2.0</span></h1>
 
 <h2>Организация</h2>
 <div class="grid">
@@ -77,18 +129,26 @@
 </div>
 
 <h2>Пользователь</h2>
+<div class="card">
+  <div class="row">
+    <label>ФИО одной строкой</label>
+    <input id="FullName" placeholder="Иванов Иван Иванович или Иванов Иван" oninput="app.parseFullName()" />
+    <div class="hint">Формат: Фамилия Имя Отчество. Если отчество не указано, MiddleName не попадет в XML. Можно не заполнять это поле и заполнить 3 поля ниже вручную.</div>
+  </div>
+</div>
+
 <div class="grid">
   <div class="row">
     <label class="req">PersonUID</label>
     <input id="PersonUID" />
   </div>
   <div class="row">
-    <label class="req">FirstName</label>
-    <input id="FirstName" />
-  </div>
-  <div class="row">
     <label class="req">LastName</label>
     <input id="LastName" />
+  </div>
+  <div class="row">
+    <label class="req">FirstName</label>
+    <input id="FirstName" />
   </div>
   <div class="row">
     <label>MiddleName</label>
@@ -97,35 +157,12 @@
 </div>
 
 <h2>Employments.Value</h2>
-<div class="grid">
-  <div class="row">
-    <label class="req">InstitutionType</label>
-    <select id="InstitutionType">
-      <option value="grbs">grbs</option>
-      <option value="organization">organization</option>
-      <option value="cb">cb</option>
-      <option value="mo">mo</option>
-    </select>
-  </div>
-  <div class="row">
-    <label class="req">Position</label>
-    <input id="Position" />
-  </div>
-  <div class="row">
-    <label class="req">VidJob</label>
-    <select id="VidJob">
-      <option value="Основное место работы">Основное место работы</option>
-      <option value="Совместительство">Совместительство</option>
-    </select>
-  </div>
-  <div class="row">
-    <label class="req">Deleted</label>
-    <select id="Deleted">
-      <option value="false">false</option>
-      <option value="true">true</option>
-    </select>
-  </div>
+<div class="bar">
+  <button type="button" onclick="app.addEmployment()">+ Добавить вид работы</button>
+  <button type="button" onclick="app.fillDemoEmployments()">Заполнить 3 вида работы</button>
+  <span class="hint">Можно добавить до 4 строк Employments.Value.</span>
 </div>
+<div id="employments"></div>
 
 <h2>Request</h2>
 <div class="grid">
@@ -134,6 +171,7 @@
     <select id="RequestType">
       <option value="connect">connect</option>
       <option value="change">change</option>
+      <option value="annulment">annulment</option>
     </select>
   </div>
   <div class="row">
@@ -143,7 +181,7 @@
 </div>
 
 <div class="bar">
-  <button id="btnGenerate" type="button" onclick="app.generate()">Сгенерировать XML</button>
+  <button id="btnGenerate" class="primary" type="button" onclick="app.generate()">Сгенерировать XML</button>
   <button id="btnDownload" type="button" onclick="app.downloadXml()" disabled>Скачать data.xml</button>
   <span id="formMsg"></span>
 </div>
@@ -176,6 +214,29 @@ const CONST = {
   RowValueName: "Не заполняется пользователем",
 };
 
+const POSITION_OPTIONS = [
+  "Сотрудник",
+  "Специалист",
+  "Аналитик",
+  "Разработчик",
+  "Председатель",
+  "Глава",
+  "Начальник службы",
+  "Начальник управления",
+  "Начальник инспекции",
+  "Заместитель начальника инспекции",
+  "Заместитель начальника управления"
+];
+
+const VIDJOB_OPTIONS = [
+  "Основное место работы",
+  "Внутреннее совместительство",
+  "Внешнее совместительство",
+  "Иное"
+];
+
+let employmentSeq = 0;
+
 const $ = (id) => document.getElementById(id);
 
 function nowMoscowISO() {
@@ -204,6 +265,18 @@ function setMsg(elId, text, ok) {
   el.className = ok ? "ok" : "err";
   el.style.fontWeight = "700";
   setTimeout(() => { el.style.fontWeight = "400"; }, 700);
+}
+
+function parseFullName() {
+  const raw = $("FullName").value.trim().replace(/\s+/g, " ");
+  if (!raw) return;
+
+  const parts = raw.split(" ");
+  if (parts.length < 2) return;
+
+  $("LastName").value = parts[0] || "";
+  $("FirstName").value = parts[1] || "";
+  $("MiddleName").value = parts.slice(2).join(" ") || "";
 }
 
 async function lookup() {
@@ -250,34 +323,191 @@ async function lookup() {
   }
 }
 
-function generate() {
-  const required = [
-    "InstitutionINN","InstitutionName","InstitutionOGRN",
-    "PersonUID","FirstName","LastName",
-    "InstitutionType","Position","VidJob","Deleted",
-    "RequestType","RequestUID"
-  ];
+function optionHtml(values, selected) {
+  return values.map(v => `<option value="${escapeXml(v)}"${v === selected ? " selected" : ""}>${escapeXml(v)}</option>`).join("");
+}
 
+function addEmployment(defaults = {}) {
+  const container = $("employments");
+  const count = container.querySelectorAll(".employment").length;
+
+  if (count >= 4) {
+    setMsg("formMsg", "Максимум 4 вида работы", false);
+    return;
+  }
+
+  employmentSeq += 1;
+  const id = "emp_" + employmentSeq;
+
+  const card = document.createElement("div");
+  card.className = "employment card";
+  card.dataset.empId = id;
+
+  card.innerHTML = `
+    <div class="employment-head">
+      <h3>Вид работы #${count + 1}</h3>
+      <button type="button" class="small-btn danger" onclick="app.removeEmployment('${id}')">Удалить</button>
+    </div>
+
+    <div class="grid">
+      <div class="row">
+        <label class="req">InstitutionType</label>
+        <select data-field="InstitutionType">
+          <option value="grbs"${defaults.InstitutionType === "grbs" ? " selected" : ""}>grbs</option>
+          <option value="organization"${(defaults.InstitutionType || "organization") === "organization" ? " selected" : ""}>organization</option>
+          <option value="cb"${defaults.InstitutionType === "cb" ? " selected" : ""}>cb</option>
+          <option value="mo"${defaults.InstitutionType === "mo" ? " selected" : ""}>mo</option>
+        </select>
+      </div>
+
+      <div class="row">
+        <label class="req">Position из списка</label>
+        <select data-field="PositionSelect" onchange="app.onPositionSelect(this)">
+          <option value="">Выбрать из списка</option>
+          ${optionHtml(POSITION_OPTIONS, defaults.Position)}
+          <option value="__custom__"${defaults.Position && !POSITION_OPTIONS.includes(defaults.Position) ? " selected" : ""}>Свое значение</option>
+        </select>
+      </div>
+
+      <div class="row">
+        <label>Position свое значение</label>
+        <input data-field="PositionCustom" value="${escapeXml(defaults.Position && !POSITION_OPTIONS.includes(defaults.Position) ? defaults.Position : "")}" placeholder="Можно ввести свою должность" />
+      </div>
+
+      <div class="row">
+        <label class="req">VidJob</label>
+        <select data-field="VidJob">
+          ${optionHtml(VIDJOB_OPTIONS, defaults.VidJob || "Основное место работы")}
+        </select>
+      </div>
+
+      <div class="row">
+        <label class="req">Deleted</label>
+        <select data-field="Deleted">
+          <option value="false"${(defaults.Deleted || "false") === "false" ? " selected" : ""}>false</option>
+          <option value="true"${defaults.Deleted === "true" ? " selected" : ""}>true</option>
+        </select>
+      </div>
+    </div>
+  `;
+
+  container.appendChild(card);
+  renumberEmployments();
+}
+
+function removeEmployment(id) {
+  const cards = Array.from(document.querySelectorAll(".employment"));
+  if (cards.length <= 1) {
+    setMsg("formMsg", "Должен остаться минимум 1 вид работы", false);
+    return;
+  }
+  const card = document.querySelector(`[data-emp-id="${id}"]`);
+  if (card) card.remove();
+  renumberEmployments();
+}
+
+function renumberEmployments() {
+  Array.from(document.querySelectorAll(".employment")).forEach((card, idx) => {
+    const h = card.querySelector("h3");
+    if (h) h.textContent = "Вид работы #" + (idx + 1);
+  });
+}
+
+function onPositionSelect(selectEl) {
+  const card = selectEl.closest(".employment");
+  const custom = card.querySelector('[data-field="PositionCustom"]');
+
+  if (selectEl.value && selectEl.value !== "__custom__") {
+    custom.value = "";
+  }
+}
+
+function getPosition(card) {
+  const selected = card.querySelector('[data-field="PositionSelect"]').value;
+  const custom = card.querySelector('[data-field="PositionCustom"]').value.trim();
+
+  if (custom) return custom;
+  if (selected && selected !== "__custom__") return selected;
+  return "";
+}
+
+function getEmployments() {
+  return Array.from(document.querySelectorAll(".employment")).map(card => ({
+    InstitutionType: card.querySelector('[data-field="InstitutionType"]').value.trim(),
+    Position: getPosition(card),
+    VidJob: card.querySelector('[data-field="VidJob"]').value.trim(),
+    Deleted: card.querySelector('[data-field="Deleted"]').value.trim(),
+  }));
+}
+
+function fillDemoEmployments() {
+  $("employments").innerHTML = "";
+  employmentSeq = 0;
+  addEmployment({ InstitutionType: "organization", Position: "Специалист", VidJob: "Основное место работы", Deleted: "false" });
+  addEmployment({ InstitutionType: "organization", Position: "Аналитик", VidJob: "Внутреннее совместительство", Deleted: "false" });
+  addEmployment({ InstitutionType: "organization", Position: "Разработчик", VidJob: "Внешнее совместительство", Deleted: "false" });
+}
+
+function clearOutputs() {
+  $("btnDownload").disabled = true;
+  $("btnCopyB64").disabled = true;
+  $("btnDownloadB64").disabled = true;
+  $("xmlOut").value = "";
+  $("base64Out").value = "";
+  $("b64Msg").textContent = "";
+}
+
+function validate() {
   const inn = $("InstitutionINN").value.trim();
   if (!/^\d{10}$/.test(inn)) {
     $("err_inn").textContent = "ИНН должен быть 10 цифр";
-    setMsg("formMsg", "Ошибка: проверь ИНН", false);
-    return;
-  } else {
-    $("err_inn").textContent = "";
+    return "Ошибка: проверь ИНН";
   }
+  $("err_inn").textContent = "";
+
+  const required = [
+    "InstitutionINN","InstitutionName","InstitutionOGRN",
+    "PersonUID","FirstName","LastName",
+    "RequestType","RequestUID"
+  ];
 
   for (const id of required) {
-    if (!$(id).value.trim()) {
-      setMsg("formMsg", "Не заполнены обязательные поля", false);
-      $("btnDownload").disabled = true;
-      $("btnCopyB64").disabled = true;
-      $("btnDownloadB64").disabled = true;
-      $("xmlOut").value = "";
-      $("base64Out").value = "";
-      $("b64Msg").textContent = "";
-      return;
+    if (!$(id).value.trim()) return "Не заполнены обязательные поля";
+  }
+
+  const employments = getEmployments();
+  if (employments.length === 0) return "Добавь минимум 1 вид работы";
+
+  for (let i = 0; i < employments.length; i++) {
+    const e = employments[i];
+    if (!e.InstitutionType || !e.Position || !e.VidJob || !e.Deleted) {
+      return `Не заполнены поля в виде работы #${i + 1}`;
     }
+  }
+
+  return "";
+}
+
+function generateEmploymentsXml() {
+  const inn = $("InstitutionINN").value.trim();
+  const name = $("InstitutionName").value.trim();
+
+  return getEmployments().map(e => `        <Value InstitutionINN="${escapeXml(inn)}"
+               InstitutionName="${escapeXml(name)}"
+               InstitutionType="${escapeXml(e.InstitutionType)}"
+               Position="${escapeXml(e.Position)}"
+               VidJob="${escapeXml(e.VidJob)}"
+               Deleted="${escapeXml(e.Deleted)}"/>`).join("\n");
+}
+
+function generate() {
+  parseFullName();
+
+  const err = validate();
+  if (err) {
+    clearOutputs();
+    setMsg("formMsg", err, false);
+    return;
   }
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -297,12 +527,7 @@ function generate() {
             PersonWorkEmail="${escapeXml(CONST.PersonWorkEmail)}"
             PersonWorkPhone="${escapeXml(CONST.PersonWorkPhone)}">
       <Employments>
-        <Value InstitutionINN="${escapeXml($("InstitutionINN").value.trim())}"
-               InstitutionName="${escapeXml($("InstitutionName").value.trim())}"
-               InstitutionType="${escapeXml($("InstitutionType").value.trim())}"
-               Position="${escapeXml($("Position").value.trim())}"
-               VidJob="${escapeXml($("VidJob").value.trim())}"
-               Deleted="${escapeXml($("Deleted").value.trim())}"/>
+${generateEmploymentsXml()}
       </Employments>
     </Person>
     <Request InfoSystemName="${escapeXml(CONST.RequestInfoSystemName)}"
@@ -320,7 +545,7 @@ function generate() {
   const b64 = toBase64Utf8(xml);
   $("base64Out").value = b64;
 
-  setMsg("formMsg", "XML сгенерирован", true);
+  setMsg("formMsg", "XML v2.0 сгенерирован", true);
   setMsg("b64Msg", "Base64 сформирован", true);
 
   $("btnDownload").disabled = false;
@@ -370,7 +595,22 @@ async function copyBase64() {
   }
 }
 
-window.app = { lookup, generate, downloadXml, downloadBase64, copyBase64 };
+window.app = {
+  lookup,
+  parseFullName,
+  addEmployment,
+  removeEmployment,
+  onPositionSelect,
+  fillDemoEmployments,
+  generate,
+  downloadXml,
+  downloadBase64,
+  copyBase64
+};
+
+window.addEventListener("DOMContentLoaded", () => {
+  addEmployment({ InstitutionType: "organization", Position: "Специалист", VidJob: "Основное место работы", Deleted: "false" });
+});
 </script>
 </body>
 </html>
