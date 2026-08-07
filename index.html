@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Генератор XML 2.0</title>
+  <title>Генератор XML 2.1</title>
   <style>
     :root {
       --blue: #0b3b75;
@@ -107,7 +107,7 @@
 </head>
 <body>
 
-<h1>Генератор XML для тестов <span class="badge">v2.0</span></h1>
+<h1>Генератор XML для тестов <span class="badge">v2.1</span></h1>
 
 <h2>Организация</h2>
 <div class="grid">
@@ -153,6 +153,14 @@
   <div class="row">
     <label>MiddleName</label>
     <input id="MiddleName" />
+  </div>
+  <div class="row">
+    <label class="req">PersonWorkEmail</label>
+    <input id="PersonWorkEmail"
+           type="email"
+           value="evgenii.gurbanovski@unicardtech.ru"
+           placeholder="email для уведомлений" />
+    <div class="hint">Можно менять перед генерацией XML. По умолчанию: evgenii.gurbanovski@unicardtech.ru</div>
   </div>
 </div>
 
@@ -204,7 +212,6 @@ const CONST = {
   TypeExportData: "ПользователиДляБПЭК",
   PackageVersion: "2026-01-01",
   InsuranceNumber: "01234567890",
-  PersonWorkEmail: "evgenii.gurbanovskii@unicardtech.ru",
   PersonINN: "012345678912",
   PersonWorkPhone: "78127770011",
   InnGRBS: "",
@@ -467,12 +474,17 @@ function validate() {
 
   const required = [
     "InstitutionINN","InstitutionName","InstitutionOGRN",
-    "PersonUID","FirstName","LastName",
+    "PersonUID","FirstName","LastName","PersonWorkEmail",
     "RequestType","RequestUID"
   ];
 
   for (const id of required) {
     if (!$(id).value.trim()) return "Не заполнены обязательные поля";
+  }
+
+  const email = $("PersonWorkEmail").value.trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return "Некорректный PersonWorkEmail";
   }
 
   const employments = getEmployments();
@@ -524,7 +536,7 @@ function generate() {
             LastName="${escapeXml($("LastName").value.trim())}"${$("MiddleName").value.trim() ? `\n            MiddleName="${escapeXml($("MiddleName").value.trim())}"` : ""}
             InsuranceNumber="${escapeXml(CONST.InsuranceNumber)}"
             PersonINN="${escapeXml(CONST.PersonINN)}"
-            PersonWorkEmail="${escapeXml(CONST.PersonWorkEmail)}"
+            PersonWorkEmail="${escapeXml($("PersonWorkEmail").value.trim())}"
             PersonWorkPhone="${escapeXml(CONST.PersonWorkPhone)}">
       <Employments>
 ${generateEmploymentsXml()}
@@ -545,7 +557,7 @@ ${generateEmploymentsXml()}
   const b64 = toBase64Utf8(xml);
   $("base64Out").value = b64;
 
-  setMsg("formMsg", "XML v2.0 сгенерирован", true);
+  setMsg("formMsg", "XML v2.1 сгенерирован", true);
   setMsg("b64Msg", "Base64 сформирован", true);
 
   $("btnDownload").disabled = false;
